@@ -131,6 +131,115 @@ let userData = req.body;
 
 
 
+// POST: Add Category
+app.post("/add-category", async (req, res) => {
+  try {
+    const category = req.body;
+    
+
+    // Check if the category already exists in the database
+    const existingCategory = await categoriesCollection.findOne({
+      name: category.name,
+    });
+
+    if (existingCategory) {
+      return res.send({ message: "Category already exists" });
+    }
+
+    // Insert the new category
+    const result = await categoriesCollection.insertOne({
+      name: category.name,
+      availableAmount: category.availableAmount,
+    });
+
+    res.send({ message: "Category added successfully", result });
+  } catch (error) {
+    console.error("Error inserting category data:", error);
+    res.status(500).send("Internal Server Error");
+  }
+});
+
+
+//fetch categories data
+
+  app.get("/allcategories", async (req, res) => {
+      try {
+        const result = await categoriesCollection.find().toArray();
+        res.send(result);
+      } catch (error) {
+        res.send(error);
+      }
+    });
+
+
+
+
+
+// Update Category by ID
+    app.put("/edit-category/:id", async (req, res) => {
+      try {
+        const id = req.params.id;
+        console.log(id)
+        const updatedCategory = req.body; // The new category data from the client
+
+        if (!ObjectId.isValid(id)) {
+          return res.status(400).send({ message: "Invalid category ID" });
+        }
+
+        const filter = { _id: new ObjectId(id) };
+        const updateDoc = {
+          $set: {
+            name: updatedCategory.name,
+            availableAmount: updatedCategory.availableAmount,
+          },
+        };
+
+        const result = await categoriesCollection.updateOne(filter, updateDoc);
+
+        if (result.modifiedCount === 0) {
+          return res
+            .status(404)
+            .send({ message: "Category not found or not modified" });
+        }
+
+        res.send({ message: "Category updated successfully" });
+      } catch (error) {
+        console.error("Error updating category:", error);
+        res.status(500).send({ message: "Failed to update category" });
+      }
+    });
+
+    // Delete Category by ID
+    app.delete("/delete-category/:id", async (req, res) => {
+      try {
+        const id = req.params.id;
+
+        if (!ObjectId.isValid(id)) {
+          return res.status(400).send({ message: "Invalid category ID" });
+        }
+
+        const result = await categoriesCollection.deleteOne({ _id: new ObjectId(id) });
+
+        if (result.deletedCount === 0) {
+          return res.status(404).send({ message: "Category not found" });
+        }
+
+        res.send({ message: "Category deleted successfully" });
+      } catch (error) {
+        console.error("Error deleting category:", error);
+        res.status(500).send({ message: "Failed to delete category" });
+      }
+    });
+
+
+
+
+
+
+
+
+
+
 
 
 
