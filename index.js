@@ -237,14 +237,13 @@ app.post("/add-category", async (req, res) => {
 
 
 
-
 // POST: Add products
 app.post("/add-product", async (req, res) => {
   try {
     const product = req.body;
 
     // Validate required fields
-    const requiredFields = ['productId', 'name', 'category'];
+    const requiredFields = ['productId', 'name'];
     const missingFields = requiredFields.filter(field => !product[field]);
     
     if (missingFields.length > 0) {
@@ -277,15 +276,17 @@ app.post("/add-product", async (req, res) => {
       });
     }
 
-    // Validate category exists
-    const categoryExists = await categoriesCollection.findOne({
-      _id: new ObjectId(product.category)
-    });
-
-    if (!categoryExists) {
-      return res.status(400).send({ 
-        message: "Specified category does not exist" 
+    // Validate category exists if provided
+    if (product.category) {
+      const categoryExists = await categoriesCollection.findOne({
+        _id: new ObjectId(product.category)
       });
+
+      if (!categoryExists) {
+        return res.status(400).send({ 
+          message: "Specified category does not exist" 
+        });
+      }
     }
 
     // Prepare new product document
@@ -295,7 +296,8 @@ app.post("/add-product", async (req, res) => {
       description: product.description || "",
       price: parseFloat(product.price),
       availableAmount: parseInt(product.availableAmount),
-      category: new ObjectId(product.category), // Store as ObjectId
+      image: product.image || null, // Add image field
+      category: product.category ? new ObjectId(product.category) : null, // Store as ObjectId if exists
       createdAt: new Date(),
       updatedAt: new Date(),
       status: 'active' // Additional useful field
@@ -309,6 +311,11 @@ app.post("/add-product", async (req, res) => {
       _id: result.insertedId
     });
 
+    // Convert ObjectId to string for client
+    if (createdProduct.category) {
+      createdProduct.category = createdProduct.category.toString();
+    }
+
     res.status(201).send({ 
       success: true,
       message: "Product added successfully",
@@ -319,11 +326,18 @@ app.post("/add-product", async (req, res) => {
     console.error("Error adding product:", error);
     
     // Handle specific MongoDB errors
-    if (error.name === 'MongoServerError' && error.code === 121) {
-      return res.status(400).send({ 
-        message: "Validation failed against schema rules",
-        details: error.errInfo.details
-      });
+    if (error.name === 'MongoServerError') {
+      if (error.code === 121) {
+        return res.status(400).send({ 
+          message: "Validation failed against schema rules",
+          details: error.errInfo.details
+        });
+      }
+      if (error.code === 11000) {
+        return res.status(409).send({
+          message: "Duplicate key error - product ID or name already exists"
+        });
+      }
     }
 
     res.status(500).send({ 
@@ -335,7 +349,6 @@ app.post("/add-product", async (req, res) => {
     });
   }
 });
-
 
 
 //fetch categories data
@@ -351,9 +364,6 @@ app.post("/add-product", async (req, res) => {
 
 
 
-
-
-
 // PUT: Update product by ID
 app.put("/update-product/:id", async (req, res) => {
   try {
@@ -366,9 +376,13 @@ app.put("/update-product/:id", async (req, res) => {
     }
 
     // Validate required fields
-    if (!updatedProduct.productId || !updatedProduct.name || !updatedProduct.category) {
+    if (!updatedProduct.productId || !updatedProduct.name) {
       return res.status(400).send({ 
-        message: "Product ID, Name, and Category are required" 
+        message: "Product ID and Name are required",
+        fields: {
+          productId: !updatedProduct.productId ? 'Required' : 'Valid',
+          name: !updatedProduct.name ? 'Required' : 'Valid'
+        }
       });
     }
 
@@ -384,19 +398,33 @@ app.put("/update-product/:id", async (req, res) => {
     // Check for duplicate product ID (if changed)
     if (updatedProduct.productId !== existingProduct.productId) {
       const duplicate = await productsCollection.findOne({
-        productId: updatedProduct.productId
+        productId: updatedProduct.productId,
+        _id: { $ne: new ObjectId(id) } // Exclude current product
       });
       if (duplicate) {
-        return res.status(409).send({ message: "Product ID already exists" });
+        return res.status(409).send({ 
+          message: "Product ID already exists in another product" 
+        });
       }
     }
 
-    // Validate category exists
-    const categoryExists = await categoriesCollection.findOne({
-      _id: new ObjectId(updatedProduct.category)
-    });
-    if (!categoryExists) {
-      return res.status(400).send({ message: "Category does not exist" });
+    // Validate category exists if provided
+    if (updatedProduct.category) {
+      const categoryExists = await categoriesCollection.findOne({
+        _id: new ObjectId(updatedProduct.category)
+      });
+      if (!categoryExists) {
+        return res.status(400).send({ 
+          message: "Specified category does not exist" 
+        });
+      }
+    }
+
+    // Validate field types
+    if (isNaN(updatedProduct.price) || isNaN(updatedProduct.availableAmount)) {
+      return res.status(400).send({ 
+        message: "Price and available amount must be numbers" 
+      });
     }
 
     // Prepare update document
@@ -404,10 +432,13 @@ app.put("/update-product/:id", async (req, res) => {
       $set: {
         productId: updatedProduct.productId,
         name: updatedProduct.name,
-        description: updatedProduct.description || "",
-        price: parseFloat(updatedProduct.price) || 0,
-        availableAmount: parseInt(updatedProduct.availableAmount) || 0,
-        category: new ObjectId(updatedProduct.category),
+        description: updatedProduct.description || existingProduct.description,
+        price: parseFloat(updatedProduct.price) || existingProduct.price,
+        availableAmount: parseInt(updatedProduct.availableAmount) || existingProduct.availableAmount,
+        image: updatedProduct.image || existingProduct.image, // Handle image update
+        category: updatedProduct.category 
+          ? new ObjectId(updatedProduct.category) 
+          : existingProduct.category,
         updatedAt: new Date()
       }
     };
@@ -419,8 +450,9 @@ app.put("/update-product/:id", async (req, res) => {
     );
 
     if (result.modifiedCount === 0) {
-      return res.status(404).send({ 
-        message: "Product not found or no changes made" 
+      return res.status(200).send({ 
+        message: "No changes detected",
+        product: existingProduct
       });
     }
 
@@ -429,25 +461,44 @@ app.put("/update-product/:id", async (req, res) => {
       _id: new ObjectId(id) 
     });
     
-    res.send({ 
+    // Convert ObjectId to string for client
+    if (product.category) {
+      product.category = product.category.toString();
+    }
+
+    res.status(200).send({ 
+      success: true,
       message: "Product updated successfully",
       product 
     });
 
   } catch (error) {
     console.error("Error updating product:", error);
+    
+    // Handle specific MongoDB errors
+    if (error.name === 'MongoServerError') {
+      if (error.code === 121) {
+        return res.status(400).send({ 
+          message: "Validation failed against schema rules",
+          details: error.errInfo.details
+        });
+      }
+      if (error.code === 11000) {
+        return res.status(409).send({
+          message: "Duplicate key error - product ID already exists"
+        });
+      }
+    }
+
     res.status(500).send({ 
+      success: false,
       message: "Failed to update product",
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+      error: process.env.NODE_ENV === 'development' 
+        ? error.message 
+        : undefined
     });
   }
 });
-
-
-
-
-
-
 
 
 
