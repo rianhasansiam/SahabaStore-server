@@ -59,7 +59,7 @@ let userData = req.body;
     
         if (existingUser) {
           // If the user already exists, send a response and avoid insertion
-          // Console.log("kire abar id khulos")
+     
           return res.send({ message: "User already exists" });
         } else {
           // Add a default role to the user data
@@ -652,6 +652,74 @@ app.put("/add-to-wishlist", async (req, res) => {
 
 
 
+
+//remove wishlist
+app.put("/remove-from-wishlist", async (req, res) => {
+  try {
+    const { email, productId } = req.body;
+    console.log(productId,email)
+
+    if (!email || !productId) {
+      return res.status(400).send({ message: "Email and productId are required" });
+    }
+
+    const user = await userInfoCollection.findOne({ email });
+
+    if (!user) {
+      return res.status(404).send({ message: "User not found" });
+    }
+
+    // Remove product from wishlist
+    const result = await userInfoCollection.updateOne(
+      { email },
+      {
+        $pull: {
+          addToWishlist: { productId },
+        },
+      }
+    );
+
+    if (result.modifiedCount > 0) {
+      res.send({ message: "Product removed from wishlist successfully" });
+    } else {
+      res.status(400).send({ message: "Product not found in wishlist" });
+    }
+  } catch (error) {
+    console.error("Error removing from wishlist:", error);
+    res.status(500).send({ message: "Internal Server Error" });
+  }
+});
+
+
+
+
+
+
+// Fetch each product by its ID
+app.get("/eachproduct/:id", async (req, res) => {
+  const { id } = req.params;
+ 
+
+  // Validate the ObjectId format
+  if (!ObjectId.isValid(id)) {
+    return res.status(400).send({ message: "Invalid product ID format" });
+  }
+
+  try {
+    const query = { _id: new ObjectId(id) };
+    const result = await productsCollection.findOne(query);
+
+    if (!result) {
+      return res.status(404).send({ message: "Product not found" });
+    }
+
+    // Return the product details
+    res.status(200).send(result);
+  } catch (error) {
+    console.error("Error fetching product:", error);
+    res.status(500).send({ message: "Internal Server Error" });
+  }
+});
 
 
 
