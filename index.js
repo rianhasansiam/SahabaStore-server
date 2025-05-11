@@ -130,14 +130,11 @@ let userData = req.body;
 
 
 
-
 // POST: Add Category
 app.post("/add-category", async (req, res) => {
   try {
     const category = req.body;
-    
 
-    // Check if the category already exists in the database
     const existingCategory = await categoriesCollection.findOne({
       name: category.name,
     });
@@ -146,10 +143,10 @@ app.post("/add-category", async (req, res) => {
       return res.send({ message: "Category already exists" });
     }
 
-    // Insert the new category
     const result = await categoriesCollection.insertOne({
       name: category.name,
       availableAmount: category.availableAmount,
+      image: category.image, // Add image field
     });
 
     res.send({ message: "Category added successfully", result });
@@ -158,6 +155,7 @@ app.post("/add-category", async (req, res) => {
     res.status(500).send("Internal Server Error");
   }
 });
+
 
 
 //fetch categories data
@@ -174,40 +172,42 @@ app.post("/add-category", async (req, res) => {
 
 
 
+app.put("/edit-category/:id", async (req, res) => {
+  try {
+    const id = req.params.id;
+    const updatedCategory = req.body;
 
-// Update Category by ID
-    app.put("/edit-category/:id", async (req, res) => {
-      try {
-        const id = req.params.id;
-        console.log(id)
-        const updatedCategory = req.body; // The new category data from the client
+    if (!ObjectId.isValid(id)) {
+      return res.status(400).send({ message: "Invalid category ID" });
+    }
 
-        if (!ObjectId.isValid(id)) {
-          return res.status(400).send({ message: "Invalid category ID" });
-        }
+    const filter = { _id: new ObjectId(id) };
+    const updateDoc = {
+      $set: {
+        name: updatedCategory.name,
+        availableAmount: updatedCategory.availableAmount,
+        image: updatedCategory.image, // Add image field for update
+      },
+    };
 
-        const filter = { _id: new ObjectId(id) };
-        const updateDoc = {
-          $set: {
-            name: updatedCategory.name,
-            availableAmount: updatedCategory.availableAmount,
-          },
-        };
+    const result = await categoriesCollection.updateOne(filter, updateDoc);
 
-        const result = await categoriesCollection.updateOne(filter, updateDoc);
+    if (result.modifiedCount === 0) {
+      return res
+        .status(404)
+        .send({ message: "Category not found or not modified" });
+    }
 
-        if (result.modifiedCount === 0) {
-          return res
-            .status(404)
-            .send({ message: "Category not found or not modified" });
-        }
+    res.send({ message: "Category updated successfully" });
+  } catch (error) {
+    console.error("Error updating category:", error);
+    res.status(500).send({ message: "Failed to update category" });
+  }
+});
 
-        res.send({ message: "Category updated successfully" });
-      } catch (error) {
-        console.error("Error updating category:", error);
-        res.status(500).send({ message: "Failed to update category" });
-      }
-    });
+
+
+
 
     // Delete Category by ID
     app.delete("/delete-category/:id", async (req, res) => {
@@ -549,7 +549,106 @@ app.delete("/delete-product/:id", async (req, res) => {
 
 
 
+// PUT /add-to-cart
+app.put("/add-to-cart", async (req, res) => {
+  try {
+    const { email, productId } = req.body;
+    console.log(email)
 
+    if (!email || !productId) {
+      return res
+        .status(400)
+        .send({ message: "Email and productId are required" });
+    }
+
+    const user = await userInfoCollection.findOne({ email });
+
+    if (!user) {
+      return res.status(404).send({ message: "User not found" });
+    }
+
+    const alreadyExists = user.addToCart?.some(
+      (item) => item.productId === productId
+    );
+
+    if (alreadyExists) {
+      return res
+        .status(400)
+        .send({ message: "Product already in cart" });
+    }
+
+    const result = await userInfoCollection.updateOne(
+      { email },
+      {
+        $push: {
+          addToCart: {
+            productId,
+            addedAt: new Date(), // optional
+          },
+        },
+      }
+    );
+
+    if (result.modifiedCount > 0) {
+      res.send({ message: "Product added to cart successfully" });
+    } else {
+      res.status(400).send({ message: "Cart not updated" });
+    }
+  } catch (error) {
+    console.error("Error adding to cart:", error);
+    res.status(500).send({ message: "Internal Server Error" });
+  }
+});
+
+
+
+// Wishlist route
+app.put("/add-to-wishlist", async (req, res) => {
+  try {
+    const { email, productId } = req.body;
+    console.log(email)
+
+    if (!email || !productId) {
+      return res.status(400).send({ message: "Email and productId are required" });
+    }
+
+    const user = await userInfoCollection.findOne({ email });
+
+    if (!user) {
+      return res.status(404).send({ message: "User not found" });
+    }
+
+    // Optional: prevent duplicate productId in wishlist
+    const alreadyExists = user.addToWishlist?.some(item => item.productId === productId);
+
+    if (alreadyExists) {
+      return res.status(400).send({ message: "Product already in wishlist" });
+    }
+
+    // Add to wishlist array
+    const result = await userInfoCollection.updateOne(
+      { email },
+      {
+        $push: {
+          addToWishlist: {
+            productId,
+            addedAt: new Date(),
+          },
+        },
+      }
+    );
+
+    if (result.modifiedCount > 0) {
+      res.send({ message: "Product added to wishlist successfully" });
+    } else {
+      res.status(400).send({ message: "Wishlist not updated" });
+    }
+
+  } catch (error) {
+    console.error("Error adding to wishlist:", error);
+    res.status(500).send({ message: "Internal Server Error" });
+  }
+});
 
 
 
