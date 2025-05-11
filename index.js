@@ -254,7 +254,7 @@ app.post("/add-product", async (req, res) => {
     }
 
     // Validate field types
-    if (isNaN(product.price) || isNaN(product.availableAmount)) {
+    if (isNaN(product.price)) {
       return res.status(400).send({ 
         message: "Price and available amount must be numbers" 
       });
@@ -295,12 +295,12 @@ app.post("/add-product", async (req, res) => {
       name: product.name,
       description: product.description || "",
       price: parseFloat(product.price),
-      availableAmount: parseInt(product.availableAmount),
+      availableAmount: product.availableAmount,
       image: product.image || null, // Add image field
       category: product.category ? new ObjectId(product.category) : null, // Store as ObjectId if exists
       createdAt: new Date(),
       updatedAt: new Date(),
-      status: 'active' // Additional useful field
+      shortDescription: product.shortDescription  // Additional useful field
     };
 
     // Insert the new product
@@ -421,7 +421,7 @@ app.put("/update-product/:id", async (req, res) => {
     }
 
     // Validate field types
-    if (isNaN(updatedProduct.price) || isNaN(updatedProduct.availableAmount)) {
+    if (isNaN(updatedProduct.price)) {
       return res.status(400).send({ 
         message: "Price and available amount must be numbers" 
       });
@@ -434,7 +434,7 @@ app.put("/update-product/:id", async (req, res) => {
         name: updatedProduct.name,
         description: updatedProduct.description || existingProduct.description,
         price: parseFloat(updatedProduct.price) || existingProduct.price,
-        availableAmount: parseInt(updatedProduct.availableAmount) || existingProduct.availableAmount,
+        availableAmount: updatedProduct.availableAmount || existingProduct.availableAmount,
         image: updatedProduct.image || existingProduct.image, // Handle image update
         category: updatedProduct.category 
           ? new ObjectId(updatedProduct.category) 
