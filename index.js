@@ -553,7 +553,7 @@ app.delete("/delete-product/:id", async (req, res) => {
 app.put("/add-to-cart", async (req, res) => {
   try {
     const { email, productId } = req.body;
-    console.log(email)
+  
 
     if (!email || !productId) {
       return res
@@ -606,7 +606,7 @@ app.put("/add-to-cart", async (req, res) => {
 app.put("/add-to-wishlist", async (req, res) => {
   try {
     const { email, productId } = req.body;
-    console.log(email)
+   
 
     if (!email || !productId) {
       return res.status(400).send({ message: "Email and productId are required" });
