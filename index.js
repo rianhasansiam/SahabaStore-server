@@ -657,7 +657,7 @@ app.put("/add-to-wishlist", async (req, res) => {
 app.put("/remove-from-wishlist", async (req, res) => {
   try {
     const { email, productId } = req.body;
-    console.log(productId,email)
+    // console.log(productId,email)
 
     if (!email || !productId) {
       return res.status(400).send({ message: "Email and productId are required" });
@@ -689,6 +689,8 @@ app.put("/remove-from-wishlist", async (req, res) => {
     res.status(500).send({ message: "Internal Server Error" });
   }
 });
+
+
 
 
 
