@@ -728,10 +728,75 @@ app.get("/eachproduct/:id", async (req, res) => {
 
 
 
+// GET /add-to-cart-list?email=user@example.com
+app.get("/addtocart-list", async (req, res) => {
+  try {
+    const { email } = req.query;
+
+    if (!email) {
+      return res.status(400).send({ message: "Email is required" });
+    }
+
+    const user = await userInfoCollection.findOne({ email });
+
+    if (!user || !user.addToCart || user.addToCart.length === 0) {
+      return res.send({ cartItems: [] });
+    }
+
+    const productIds = user.addToCart.map((item) => item.productId);
+
+    const products = await productsCollection
+      .find({ _id: { $in: productIds.map(id => new ObjectId(id)) } })
+      .toArray();
+
+    res.send({ cartItems: products });
+  } catch (error) {
+    console.error("Error fetching cart list:", error);
+    res.status(500).send({ message: "Internal Server Error" });
+  }
+});
 
 
 
-    
+app.delete("/remove-from-cart", async (req, res) => {
+  try {
+    const { email, productId } = req.body; // Get email and productId from the request body
+
+    // console.log("Received request with email:", email, "and productId:", productId); // Debugging log
+
+    // Validate if email and productId are provided
+    if (!email || !productId) {
+      return res.status(400).send({ message: "Email and productId are required" });
+    }
+
+    const user = await userInfoCollection.findOne({ email });
+
+    // Check if the user exists and has items in their cart
+    if (!user || !user.addToCart || user.addToCart.length === 0) {
+      return res.status(404).send({ message: "No items in the cart to remove" });
+    }
+
+    // console.log(user.addToCart);
+
+    // Filter out the item to be removed by matching productId
+    const updatedCart = user.addToCart.filter(item => item.productId !== productId);
+
+    // Update the cart in the database
+    await userInfoCollection.updateOne(
+      { email },
+      { $set: { addToCart: updatedCart } }
+    );
+
+    // Send the updated cart as a response
+    res.send({ message: "Item removed from cart", cartItems: updatedCart });
+  } catch (error) {
+    console.error("Error removing item from cart:", error);
+    res.status(500).send({ message: "Internal Server Error" });
+  }
+});
+
+
+
     app.listen(port, () => {
       console.log(`🚀 Server running on http://localhost:${port}`);
     });
