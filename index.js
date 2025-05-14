@@ -32,6 +32,7 @@ async function run() {
     const userInfoCollection = datafile.collection("users");
     const categoriesCollection = datafile.collection("categories");
     const productsCollection = datafile.collection("products");
+    const couponDetailsCollection = datafile.collection("coupon");
    
 
 
@@ -794,6 +795,142 @@ app.delete("/remove-from-cart", async (req, res) => {
     res.status(500).send({ message: "Internal Server Error" });
   }
 });
+
+
+
+
+
+//post coupon code
+app.post("/add-coupon", async (req, res) => {
+  try {
+    const coupon = req.body;
+    
+
+    // Basic validation
+    if (!coupon.code || isNaN(coupon.discount)) {
+      return res.status(400).send({ message: "Coupon code and discount are required" });
+    }
+
+    // Check for duplicate
+    const existing = await couponDetailsCollection.findOne({ code: coupon.code });
+    if (existing) {
+      return res.status(409).send({ message: "Coupon code already exists" });
+    }
+
+    // Insert
+    const result = await couponDetailsCollection.insertOne({
+      ...coupon,
+      discount: parseFloat(coupon.discount),
+      minOrder: Number(coupon.minOrder || 0),
+      expires: new Date(coupon.expires),
+      status: coupon.status || 'active',
+      createdAt: new Date(),
+      updatedAt: new Date()
+    });
+
+    res.send({ success: true, message: "Coupon added", result });
+  } catch (error) {
+    console.error("Error adding coupon:", error);
+    res.status(500).send({ success: false, message: "Server error" });
+  }
+});
+
+
+
+//get coupon
+app.get("/coupons", async (req, res) => {
+  try {
+    const result = await couponDetailsCollection.find().toArray();
+    res.send(result);
+  } catch (error) {
+    res.status(500).send({ message: "Failed to fetch coupons" });
+  }
+});
+
+
+
+//update coupon
+app.put("/update-coupon/:id", async (req, res) => {
+  try {
+    const id = req.params.id;
+    const updatedCoupon = req.body;
+
+    if (!ObjectId.isValid(id)) {
+      return res.status(400).send({ message: "Invalid coupon ID" });
+    }
+
+    const existing = await couponDetailsCollection.findOne({ _id: new ObjectId(id) });
+    if (!existing) {
+      return res.status(404).send({ message: "Coupon not found" });
+    }
+
+    // Check for duplicate code if changed
+    if (updatedCoupon.code && updatedCoupon.code !== existing.code) {
+      const duplicate = await couponDetailsCollection.findOne({ code: updatedCoupon.code });
+      if (duplicate) {
+        return res.status(409).send({ message: "Coupon code already in use" });
+      }
+    }
+
+    const updateDoc = {
+      $set: {
+        ...updatedCoupon,
+        discount: parseFloat(updatedCoupon.discount),
+        minOrder: Number(updatedCoupon.minOrder || 0),
+        expires: new Date(updatedCoupon.expires),
+        updatedAt: new Date()
+      }
+    };
+
+    const result = await couponDetailsCollection.updateOne({ _id: new ObjectId(id) }, updateDoc);
+
+    res.send({ success: true, message: "Coupon updated", result });
+  } catch (error) {
+    console.error("Error updating coupon:", error);
+    res.status(500).send({ message: "Update failed" });
+  }
+});
+
+
+
+
+
+
+
+
+//delete coupon 
+app.delete("/delete-coupon/:id", async (req, res) => {
+  try {
+    const id = req.params.id;
+
+    if (!ObjectId.isValid(id)) {
+      return res.status(400).send({ message: "Invalid coupon ID" });
+    }
+
+    const result = await couponDetailsCollection.deleteOne({ _id: new ObjectId(id) });
+
+    if (result.deletedCount === 0) {
+      return res.status(404).send({ message: "Coupon not found" });
+    }
+
+    res.send({ message: "Coupon deleted successfully" });
+  } catch (error) {
+    console.error("Error deleting coupon:", error);
+    res.status(500).send({ message: "Failed to delete coupon" });
+  }
+});
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
