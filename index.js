@@ -33,6 +33,7 @@ async function run() {
     const categoriesCollection = datafile.collection("categories");
     const productsCollection = datafile.collection("products");
     const couponDetailsCollection = datafile.collection("coupon");
+    const orderDetailsCollection = datafile.collection("orders");
    
 
 
@@ -362,6 +363,27 @@ app.post("/add-product", async (req, res) => {
         res.send(error);
       }
     });
+
+
+// Get single product by ID
+app.get("/products/:id", async (req, res) => {
+  try {
+    const id = req.params.id;
+    const query = { _id: new ObjectId(id) }; // Convert string ID to MongoDB ObjectId
+    const result = await productsCollection.findOne(query);
+    
+    if (result) {
+      res.send(result);
+    } else {
+      res.status(404).send({ message: "Product not found" });
+    }
+  } catch (error) {
+    console.error("Error fetching product:", error);
+    res.status(500).send({ message: "Internal server error" });
+  }
+});
+
+
 
 
 
@@ -924,8 +946,40 @@ app.delete("/delete-coupon/:id", async (req, res) => {
 
 
 
+// POST /add-order
+app.post("/add-order", async (req, res) => {
+  try {
+    const order = req.body;
 
+    // Basic validation
+    if (!order.customer?.name || !order.customer?.email || !order.products?.length) {
+      return res.status(400).send({ message: "Customer info and products are required" });
+    }
 
+    // Optionally validate each product
+    const invalidProduct = order.products.find(p => !p.productId || !p.price || !p.quantity);
+    if (invalidProduct) {
+      return res.status(400).send({ message: "Each product must have productId, price, and quantity" });
+    }
+
+    // Create order object
+    const newOrder = {
+      ...order,
+      status: order.status || "pending",
+      orderTotal: parseFloat(order.orderTotal || 0),
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+
+    // Insert into DB
+    const result = await orderDetailsCollection.insertOne(newOrder);
+
+    res.send({ success: true, message: "Order placed successfully", result });
+  } catch (error) {
+    console.error("Error placing order:", error);
+    res.status(500).send({ success: false, message: "Server error" });
+  }
+});
 
 
 
