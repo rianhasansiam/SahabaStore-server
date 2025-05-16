@@ -982,6 +982,51 @@ app.post("/add-order", async (req, res) => {
 });
 
 
+// Get all orders
+app.get("/orders", async (req, res) => {
+  try {
+    const orders = await orderDetailsCollection.find({}).toArray();
+    res.send({ success: true, orders });
+  } catch (error) {
+    console.error("Error fetching orders:", error);
+    res.status(500).send({ success: false, message: "Server error" });
+  }
+});
+
+
+
+
+
+app.put("/orders/:id", async (req, res) => {
+  try {
+    const id = req.params.id;
+    const { status } = req.body; // Only accept status updates
+
+    if (!ObjectId.isValid(id)) {
+      return res.status(400).send({ success: false, message: "Invalid order ID" });
+    }
+
+    const filter = { _id: new ObjectId(id) };
+    const updateDoc = {
+      $set: {
+        status, // Only update the status
+        updatedAt: new Date()
+      }
+    };
+
+    const result = await orderDetailsCollection.updateOne(filter, updateDoc);
+
+    if (result.matchedCount === 0) {
+      return res.status(404).send({ success: false, message: "Order not found" });
+    }
+
+    res.send({ success: true, message: "Order status updated successfully", result });
+  } catch (error) {
+    console.error("Error updating order:", error);
+    res.status(500).send({ success: false, message: "Server error" });
+  }
+});
+
 
 
 
