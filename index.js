@@ -101,6 +101,52 @@ let userData = req.body;
     });
 
 
+app.get("/user", async (req, res) => {
+
+  try {
+    const { email } = req.query;
+    
+    // Validate email exists and is properly formatted
+    if (!email) {
+      return res.status(400).json({ 
+        success: false,
+        message: "Email query parameter is required" 
+      });
+    }
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid email format"
+      });
+    }
+
+    const user = await userInfoCollection.findOne({ email });
+
+    if (!user) {
+      return res.status(404).json({ 
+        success: false,
+        message: "User not found" 
+      });
+    }
+
+    // Remove sensitive data before sending response
+    const { password, ...safeUserData } = user;
+    
+    res.status(200).json({
+      success: true,
+      data: safeUserData
+    });
+
+  } catch (error) {
+    console.error("Error fetching user:", error);
+    res.status(500).json({
+      success: false,
+      message: "Internal server error",
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
 
 
  // Route to delete a user
@@ -574,10 +620,11 @@ app.delete("/delete-product/:id", async (req, res) => {
 
 // PUT /add-to-cart
 app.put("/add-to-cart", async (req, res) => {
+
   try {
     const { email, productId } = req.body;
   
-
+console.log({ email, productId })
     if (!email || !productId) {
       return res
         .status(400)
@@ -585,6 +632,7 @@ app.put("/add-to-cart", async (req, res) => {
     }
 
     const user = await userInfoCollection.findOne({ email });
+      
 
     if (!user) {
       return res.status(404).send({ message: "User not found" });
