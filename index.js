@@ -624,7 +624,7 @@ app.put("/add-to-cart", async (req, res) => {
   try {
     const { email, productId } = req.body;
   
-console.log({ email, productId })
+
     if (!email || !productId) {
       return res
         .status(400)
@@ -728,7 +728,7 @@ app.put("/add-to-wishlist", async (req, res) => {
 app.put("/remove-from-wishlist", async (req, res) => {
   try {
     const { email, productId } = req.body;
-    // console.log(productId,email)
+
 
     if (!email || !productId) {
       return res.status(400).send({ message: "Email and productId are required" });
@@ -833,7 +833,7 @@ app.delete("/remove-from-cart", async (req, res) => {
   try {
     const { email, productId } = req.body; // Get email and productId from the request body
 
-    // console.log("Received request with email:", email, "and productId:", productId); // Debugging log
+
 
     // Validate if email and productId are provided
     if (!email || !productId) {
@@ -847,7 +847,7 @@ app.delete("/remove-from-cart", async (req, res) => {
       return res.status(404).send({ message: "No items in the cart to remove" });
     }
 
-    // console.log(user.addToCart);
+
 
     // Filter out the item to be removed by matching productId
     const updatedCart = user.addToCart.filter(item => item.productId !== productId);
@@ -992,6 +992,29 @@ app.delete("/delete-coupon/:id", async (req, res) => {
 
 
 
+// delete user
+app.delete("/delete-order/:id", async (req, res) => {
+  try {
+    const id = req.params.id;
+
+    if (!ObjectId.isValid(id)) {
+      return res.status(400).send({ message: "Invalid user ID" });
+    }
+
+    const result = await orderDetailsCollection.deleteOne({ _id: new ObjectId(id) });
+
+    if (result.deletedCount === 0) {
+      return res.status(404).send({ message: "User not found" });
+    }
+
+    res.send({ message: "User deleted successfully" });
+  } catch (error) {
+    console.error("Error deleting user:", error);
+    res.status(500).send({ message: "Failed to delete user" });
+  }
+});
+
+
 
 
 // POST /add-order
@@ -1074,6 +1097,12 @@ app.put("/orders/:id", async (req, res) => {
     res.status(500).send({ success: false, message: "Server error" });
   }
 });
+
+
+
+
+
+
 
 
 
