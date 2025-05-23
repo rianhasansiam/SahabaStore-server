@@ -289,11 +289,12 @@ app.put("/edit-category/:id", async (req, res) => {
 app.post("/add-product", async (req, res) => {
   try {
     const product = req.body;
+    // console.log(product)
 
     // Validate required fields
-    const requiredFields = ['productId', 'name'];
+    const requiredFields = ['productId', 'name', 'thumbnail'];
     const missingFields = requiredFields.filter(field => !product[field]);
-    
+
     if (missingFields.length > 0) {
       return res.status(400).send({ 
         message: `Missing required fields: ${missingFields.join(', ')}`,
@@ -301,18 +302,41 @@ app.post("/add-product", async (req, res) => {
       });
     }
 
-    // Validate field types
-    if (isNaN(product.price)) {
+    // Validate price format (single number or "min-max")
+    const isValidPriceRange = (value) => {
+      if (!value) return false;
+      if (typeof value === "string") {
+        return /^\d+(\.\d+)?-\d+(\.\d+)?$/.test(value) || !isNaN(parseFloat(value));
+      }
+      return !isNaN(value);
+    };
+
+    // Validate at least one price is set
+    if (!isValidPriceRange(product.price) &&
+        (!product.priceVariants || product.priceVariants.length === 0)) {
       return res.status(400).send({ 
-        message: "Price and available amount must be numbers" 
+        message: "At least one valid price must be set (e.g., '100' or '100-200')" 
       });
     }
 
-    // Check if product ID already exists
+    // Validate price variants if provided
+    if (product.priceVariants && product.priceVariants.length > 0) {
+      const invalidVariants = product.priceVariants.some(variant => 
+        !variant.quantity || isNaN(variant.price)
+      );
+
+      if (invalidVariants) {
+        return res.status(400).send({ 
+          message: "All quantity variants must have both quantity and valid price" 
+        });
+      }
+    }
+
+    // Check if product ID or name already exists
     const existingProduct = await productsCollection.findOne({
       $or: [
         { productId: product.productId },
-        { name: product.name } // Optional: prevent duplicate names too
+        { name: product.name }
       ]
     });
 
@@ -337,31 +361,52 @@ app.post("/add-product", async (req, res) => {
       }
     }
 
+    // Validate max images
+    if (product.images && product.images.length > 3) {
+      return res.status(400).send({
+        message: "Maximum 3 images allowed per product"
+      });
+    }
+
     // Prepare new product document
     const newProduct = {
       productId: product.productId,
       name: product.name,
       description: product.description || "",
-      price: parseFloat(product.price),
-      availableAmount: product.availableAmount,
-      image: product.image || null, // Add image field
-      category: product.category ? new ObjectId(product.category) : null, // Store as ObjectId if exists
+      shortDescription: product.shortDescription || "",
+      price: product.price || "0", // Accepts "100" or "100-200"
+      availableAmount: parseInt(product.availableAmount) || 0,
+      thumbnail: product.thumbnail,
+      images: product.images || [],
+      priceVariants: (product.priceVariants || []).map(variant => ({
+        quantity: variant.quantity,
+        price: parseFloat(variant.price)
+      })),
+      category: product.category ? new ObjectId(product.category) : null,
       createdAt: new Date(),
-      updatedAt: new Date(),
-      shortDescription: product.shortDescription  // Additional useful field
+      updatedAt: new Date()
     };
 
     // Insert the new product
     const result = await productsCollection.insertOne(newProduct);
 
-    // Return the complete product data
-    const createdProduct = await productsCollection.findOne({
-      _id: result.insertedId
-    });
+    // Return the complete product data with category populated
+    const createdProduct = await productsCollection.aggregate([
+      { $match: { _id: result.insertedId } },
+      {
+        $lookup: {
+          from: "categories",
+          localField: "category",
+          foreignField: "_id",
+          as: "category"
+        }
+      },
+      { $unwind: { path: "$category", preserveNullAndEmptyArrays: true } }
+    ]).next();
 
     // Convert ObjectId to string for client
     if (createdProduct.category) {
-      createdProduct.category = createdProduct.category.toString();
+      createdProduct.category = createdProduct.category._id.toString();
     }
 
     res.status(201).send({ 
@@ -373,7 +418,6 @@ app.post("/add-product", async (req, res) => {
   } catch (error) {
     console.error("Error adding product:", error);
     
-    // Handle specific MongoDB errors
     if (error.name === 'MongoServerError') {
       if (error.code === 121) {
         return res.status(400).send({ 
@@ -397,6 +441,7 @@ app.post("/add-product", async (req, res) => {
     });
   }
 });
+
 
 
 //fetch categories data
@@ -489,11 +534,32 @@ app.put("/update-product/:id", async (req, res) => {
       }
     }
 
-    // Validate field types
-    if (isNaN(updatedProduct.price)) {
+    // Validate price format
+    const isValidPriceRange = (value) => {
+      if (!value) return false;
+      if (typeof value === "string") {
+        return /^\d+(\.\d+)?-\d+(\.\d+)?$/.test(value) || !isNaN(parseFloat(value));
+      }
+      return !isNaN(value);
+    };
+
+    if (updatedProduct.price && !isValidPriceRange(updatedProduct.price)) {
       return res.status(400).send({ 
-        message: "Price and available amount must be numbers" 
+        message: "Invalid price format. Use number or range like '100' or '100-200'" 
       });
+    }
+
+    // Validate price variants if provided
+    if (updatedProduct.priceVariants && updatedProduct.priceVariants.length > 0) {
+      const invalidVariants = updatedProduct.priceVariants.some(variant => 
+        !variant.quantity || isNaN(variant.price)
+      );
+
+      if (invalidVariants) {
+        return res.status(400).send({ 
+          message: "All priceVariants must have both quantity and valid price" 
+        });
+      }
     }
 
     // Prepare update document
@@ -501,10 +567,13 @@ app.put("/update-product/:id", async (req, res) => {
       $set: {
         productId: updatedProduct.productId,
         name: updatedProduct.name,
-        description: updatedProduct.description || existingProduct.description,
-        price: parseFloat(updatedProduct.price) || existingProduct.price,
-        availableAmount: updatedProduct.availableAmount || existingProduct.availableAmount,
-        image: updatedProduct.image || existingProduct.image, // Handle image update
+        description: updatedProduct.description ?? existingProduct.description,
+        shortDescription: updatedProduct.shortDescription ?? existingProduct.shortDescription,
+        price: updatedProduct.price ?? existingProduct.price,
+        availableAmount: updatedProduct.availableAmount ?? existingProduct.availableAmount,
+        thumbnail: updatedProduct.thumbnail ?? existingProduct.thumbnail,
+        images: updatedProduct.images ?? existingProduct.images,
+        priceVariants: updatedProduct.priceVariants ?? existingProduct.priceVariants,
         category: updatedProduct.category 
           ? new ObjectId(updatedProduct.category) 
           : existingProduct.category,
@@ -529,7 +598,7 @@ app.put("/update-product/:id", async (req, res) => {
     const product = await productsCollection.findOne({ 
       _id: new ObjectId(id) 
     });
-    
+
     // Convert ObjectId to string for client
     if (product.category) {
       product.category = product.category.toString();
@@ -568,6 +637,7 @@ app.put("/update-product/:id", async (req, res) => {
     });
   }
 });
+
 
 
 
