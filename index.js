@@ -1092,16 +1092,16 @@ app.post("/add-order", async (req, res) => {
   try {
     const order = req.body;
 
-    // Basic validation
-    if (!order.customer?.name  || !order.products?.length) {
-      return res.status(400).send({ message: "Customer info and products are required" });
-    }
+    // // Basic validation
+    // if (!order.customer?.name  || !order.products?.length) {
+    //   return res.status(400).send({ message: "Customer info and products are required" });
+    // }
 
-    // Optionally validate each product
-    const invalidProduct = order.products.find(p => !p.productId || !p.price || !p.quantity);
-    if (invalidProduct) {
-      return res.status(400).send({ message: "Each product must have productId, price, and quantity" });
-    }
+    // // Optionally validate each product
+    // const invalidProduct = order.products.find(p => !p.productId || !p.price || !p.quantity);
+    // if (invalidProduct) {
+    //   return res.status(400).send({ message: "Each product must have productId, price, and quantity" });
+    // }
 
     // Create order object
     const newOrder = {
