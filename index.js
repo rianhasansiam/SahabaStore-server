@@ -1093,7 +1093,7 @@ app.post("/add-order", async (req, res) => {
     const order = req.body;
 
     // Basic validation
-    if (!order.customer?.name || !order.customer?.email || !order.products?.length) {
+    if (!order.customer?.name  || !order.products?.length) {
       return res.status(400).send({ message: "Customer info and products are required" });
     }
 
